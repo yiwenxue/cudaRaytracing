@@ -3,7 +3,7 @@
 |      | image                   | time    |
 | ---- | ----------------------- | ------- |
 | cpu  | ![cpu](image/cpu.png)   | 70.77s  |
-| cuda | ![cuda](image/cuda.png) | 24.2271 |
+| cuda | ![cuda](image/cuda.png) | 9.561s |
 
 
 ## Reference
