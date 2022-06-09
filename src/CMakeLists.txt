@@ -1,31 +1,26 @@
 set (INCLUDE
-    # external 
-    stb_image.h
-    stb_image_write.h
-
     # common utility 
     common/CudaArray.h
     common/CudaMath.h
     common/CudaUtils.h
 
+    # 
+    interop.h
+
     # implementations
     camera.h
-    ray.h
-    sphere.h
-    hittable.h
-    material.h
-    hittable_list.h
+    renderer.h
 )
 
 set (SOURCE
-    # externals 
-    stb.cpp
+    #
+    interop.cpp
 
     # implementations
+    renderer.cpp
 
     # entry
     main.cpp
-    main.cu
 )
 
 add_executable(main ${SOURCE} ${INCLUDE})
@@ -33,11 +28,20 @@ add_executable(main ${SOURCE} ${INCLUDE})
 target_include_directories(main
 PUBLIC
     ./
+    ${OPENGL_INCLUDE_DIRS}
+    ${GLFW_INCLUDE_DIRS}
     ${CUDA_INCLUDE_DIRS}
     ${CUDAToolkit_INCLUDE_DIRS}
+    ${CMAKE_SOURCE_DIR}/external
 )
 
 target_link_libraries(main 
 PUBLIC
+    imgui
+    stb
+    glfw
+    glad
+    cuda
     ${CUDA_LIBRARIES}
+    ${OPENGL_LIBRARIES}
 )

@@ -7,8 +7,9 @@
 #include <float.h>
 #include <iostream>
 #include <time.h>
+#include <vector>
 
-#include "main.h"
+#include "cudaRenderer.h"
 
 #include "common/CudaMath.h"
 #include "common/CudaArray.h"
@@ -20,7 +21,7 @@ __device__ Vec3f color(const Ray &r, HitTable **world, curandState *local_rand_s
 {
     Ray   cur_ray         = r;
     Vec3f cur_attenuation = Vec3f(1.0, 1.0, 1.0);
-    for (int i = 0; i < 50; i++)
+    for (int i = 0; i < 100; i++)
     {
         HitRecord rec;
         if ((*world)->hit(cur_ray, 0.001f, FLT_MAX, rec))
@@ -71,7 +72,7 @@ __global__ void render_init(int max_x, int max_y, curandState *rand_state)
 }
 
 __global__ void render(Vec3f *fb, int max_x, int max_y, int ns, Camera **cam, HitTable **world,
-                       curandState *rand_state)
+                       curandState *rand_state, int *count)
 {
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     int j = threadIdx.y + blockIdx.y * blockDim.y;
@@ -93,6 +94,7 @@ __global__ void render(Vec3f *fb, int max_x, int max_y, int ns, Camera **cam, Hi
     col.y           = sqrt(col.y);
     col.z           = sqrt(col.z);
     fb[pixel_index] = col;
+    atomicAdd(count, 1);
 }
 
 
@@ -160,9 +162,9 @@ __global__ void free_world(HitTable **d_list, HitTable **d_world, Camera **d_cam
 
 void ray_tracing()
 {
-    int nx = 1200;
-    int ny = 800;
-    int ns = 20;
+    int nx = 1920 * 2;
+    int ny = 1080 * 2;
+    int ns = 50;
 
     int tx = 16;
     int ty = 16;
@@ -208,7 +210,19 @@ void ray_tracing()
     render_init<<<blocks, threads>>>(nx, ny, d_rand_state);
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
-    render<<<blocks, threads>>>(fb, nx, ny, ns, d_camera, d_world, d_rand_state);
+
+    int tally, *dev_tally;
+    cudaMalloc((void **)&dev_tally, sizeof(int));
+    tally = 0;
+    cudaMemcpy(dev_tally, &tally, sizeof(int), cudaMemcpyHostToDevice);
+
+    render<<<blocks, threads>>>(fb, nx, ny, ns, d_camera, d_world, d_rand_state, dev_tally);
+
+    do {
+        cudaMemcpy(&tally, dev_tally, sizeof(int), cudaMemcpyDeviceToHost); 
+        printf("progress: %d/%d\n", tally, num_pixels);
+    } while (tally < num_pixels);
+
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
     stop                 = clock();
@@ -216,23 +230,26 @@ void ray_tracing()
     std::cerr << "took " << timer_seconds << " seconds.\n";
 
     // Output FB as Image
+    std::vector<uint> pixels(nx * ny * 3);
     std::cout << "P3\n" << nx << " " << ny << "\n255\n";
     for (int j = ny - 1; j >= 0; j--)
     {
         for (int i = 0; i < nx; i++)
         {
             size_t pixel_index = j * nx + i;
-            int    ir          = int(255.99 * fb[pixel_index].x);
-            int    ig          = int(255.99 * fb[pixel_index].y);
-            int    ib          = int(255.99 * fb[pixel_index].z);
-            std::cout << ir << " " << ig << " " << ib << "\n";
+            pixels[pixel_index * 3] = int(255.99 * fb[pixel_index].x);
+            pixels[pixel_index * 3 + 1] = int(255.99 * fb[pixel_index].y);
+            pixels[pixel_index * 3 + 2] = int(255.99 * fb[pixel_index].z);
         }
     }
+
+    stbi_write_png("output.png", nx, ny, 3, pixels.data(), nx * 3);
 
     // clean up
     checkCudaErrors(cudaDeviceSynchronize());
     free_world<<<1, 1>>>(d_list, d_world, d_camera);
     checkCudaErrors(cudaGetLastError());
+    checkCudaErrors(cudaFree(dev_tally));
     checkCudaErrors(cudaFree(d_camera));
     checkCudaErrors(cudaFree(d_world));
     checkCudaErrors(cudaFree(d_list));

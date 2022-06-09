@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.23)
 
+
 project (fluid 
     VERSION 0.0.0 
     LANGUAGES CUDA CXX C)
@@ -17,7 +18,13 @@ if(CUDA_FOUND)
     message(STATUS "Found CUDA ${CUDA_VERSION_STRING} at ${CUDA_TOOLKIT_ROOT_DIR}")
 endif()
 
+list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
+
 # find_package(Thrust REQUIRED)
+
+find_package(OpenGL REQUIRED)
+
+find_package(glfw3 REQUIRED)
 
 find_package(OpenMP REQUIRED)
 if (OPENMP_FOUND) 
@@ -26,5 +33,7 @@ if (OPENMP_FOUND)
 endif()
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+add_subdirectory(external)
 
 add_subdirectory(src)

@@ -1,54 +1,61 @@
 #pragma once
-#include "ray.h"
 
 #include "common/CudaArray.h"
 #include "common/CudaMath.h"
 
-#include <curand_kernel.h>
-
-__device__ Vec3f random_in_unit_disk(curandState *local_rand_state)
+namespace cuda_render
 {
-    Vec3f p;
-    do
-    {
-        p.x = curand_uniform(local_rand_state) * 2.0 - 1.0;
-        p.y = curand_uniform(local_rand_state) * 2.0 - 1.0;
-    } while (p.x * p.x + p.y * p.y >= 1.0f);
-    return p;
-}
+struct CameraData
+{
+    Vec2f res{0, 0};
+    Vec3f pos{0, 0, 0};
+    Vec3f view{0, 0, 0};
+    Vec3f up{0, 1, 0};
+    Vec2f fov{0.5, 0.5};
+    float apertureRadius{0.5};
+    float focalDistance{0.5f};
+};
 
 class Camera
 {
 public:
-    __device__ Camera(Vec3f lookfrom, Vec3f lookat, Vec3f vup, float vfov, float aspect,
-                      float aperture, float focus_dist)
-    {
-        lens_radius       = aperture / 2.0f;
-        float theta       = vfov * ((float) M_PI) / 180.0f;
-        float half_height = tan(theta / 2.0f);
-        float half_width  = aspect * half_height;
-        origin            = lookfrom;
-        w                 = Vec3f::normal(lookfrom - lookat);
-        u                 = Vec3f::normal(Vec3f::cross(vup, w));
-        v                 = cross(w, u);
-        lower_left_corner =
-            origin - u * half_width * focus_dist - v * half_height * focus_dist - w * focus_dist;
-        horizontal = u * 2.0f * half_width * focus_dist;
-        vertical   = v * 2.0f * half_height * focus_dist;
-    }
+    Camera();
+    virtual ~Camera();
 
-    __device__ Ray get_ray(float s, float t, curandState *local_rand_state)
-    {
-        Vec3f rd     = random_in_unit_disk(local_rand_state) * lens_radius;
-        Vec3f offset = u * rd.x + v * rd.y;
-        return Ray(origin + offset,
-                   lower_left_corner + horizontal * s + vertical * t - origin - offset);
-    }
+    void buildRenderCamera(CameraData *renderCamera);
 
-    Vec3f origin;
-    Vec3f lower_left_corner;
-    Vec3f horizontal;
-    Vec3f vertical;
-    Vec3f u, v, w;
-    float lens_radius;
+    void changeYaw(float m);
+    void changePitch(float m);
+    void changeRadius(float m);
+    void changeAltitude(float m);
+    void changeFocalDistance(float m);
+
+    void changeAperture(float m);
+
+    void setRes(float x, float y);
+    void setFovX(float x);
+
+    void move(float m);
+    void strafe(float m);
+    void rotate(){}; // not implemented
+
+private:
+    void fixYaw();
+    void fixPitch();
+    void fixAperture();
+    void fixRadius();
+    void fixFocalDistance();
+
+    Vec2f resolution{0, 0};
+    Vec2f fov{0, 0};
+
+    Vec3f centerPosition{0, 0, 0};
+    Vec3f viewDirection{0, 0, -1};
+    float yaw{0};
+    float pitch{0};
+    float radius{0};
+    float apertureRadius{0};
+    float focalDistance{0};
 };
+
+} // namespace cuda_render
