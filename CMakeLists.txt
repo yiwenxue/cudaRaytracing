@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.23)
 
-
 project (fluid 
     VERSION 0.0.0 
     LANGUAGES CUDA CXX C)
@@ -17,10 +16,6 @@ find_package(CUDA REQUIRED)
 if(CUDA_FOUND)
     message(STATUS "Found CUDA ${CUDA_VERSION_STRING} at ${CUDA_TOOLKIT_ROOT_DIR}")
 endif()
-
-list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
-
-# find_package(Thrust REQUIRED)
 
 find_package(OpenGL REQUIRED)
 

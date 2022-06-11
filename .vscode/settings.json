@@ -71,6 +71,7 @@
         "cfenv": "cpp",
         "cinttypes": "cpp",
         "valarray": "cpp",
-        "khrplatform.h": "c"
+        "khrplatform.h": "c",
+        "ios": "cpp"
     }
 }

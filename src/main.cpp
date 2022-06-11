@@ -3,8 +3,8 @@
 #include "cudaRenderer.h"
 #include "renderer.h"
 
-#define width 1200
-#define height 700
+#define width 1920
+#define height 1080
 
 int main(int argc, char **argv)
 {

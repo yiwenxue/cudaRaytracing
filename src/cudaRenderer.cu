@@ -17,11 +17,13 @@
 
 #include "stb_image_write.h"
 
+#define SCENE_OBJECTS 10
+
 __device__ Vec3f color(const Ray &r, HitTable **world, curandState *local_rand_state)
 {
     Ray   cur_ray         = r;
     Vec3f cur_attenuation = Vec3f(1.0, 1.0, 1.0);
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < 200; i++)
     {
         HitRecord rec;
         if ((*world)->hit(cur_ray, 0.001f, FLT_MAX, rec))
@@ -71,30 +73,46 @@ __global__ void render_init(int max_x, int max_y, curandState *rand_state)
     curand_init(1984 + pixel_index, 0, 0, &rand_state[pixel_index]);
 }
 
-__global__ void render(Vec3f *fb, int max_x, int max_y, int ns, Camera **cam, HitTable **world,
-                       curandState *rand_state, int *count)
+__global__ void render(cudaSurfaceObject_t surf, float4 * accumulate,int max_x, int max_y, int ns, Camera **cam, HitTable **world,
+                       curandState *rand_state, int framecount)
 {
     int i = threadIdx.x + blockIdx.x * blockDim.x;
     int j = threadIdx.y + blockIdx.y * blockDim.y;
     if ((i >= max_x) || (j >= max_y))
         return;
+    
     int         pixel_index      = j * max_x + i;
     curandState local_rand_state = rand_state[pixel_index];
+    float x = curand_uniform(&local_rand_state);
+    float y = curand_uniform(&local_rand_state);
+    float z = curand_uniform(&local_rand_state);
+
     Vec3f       col(0, 0, 0);
     for (int s = 0; s < ns; s++)
     {
-        float u = float(i + curand_uniform(&local_rand_state)) / float(max_x);
-        float v = float(j + curand_uniform(&local_rand_state)) / float(max_y);
+        float u = float(i + x) / float(max_x);
+        float v = float(j + y) / float(max_y);
         Ray   r = (*cam)->get_ray(u, v, &local_rand_state);
         col += color(r, world, &local_rand_state);
     }
     rand_state[pixel_index] = local_rand_state;
     col /= float(ns);
-    col.x           = sqrt(col.x);
-    col.y           = sqrt(col.y);
-    col.z           = sqrt(col.z);
-    fb[pixel_index] = col;
-    atomicAdd(count, 1);
+
+    accumulate[pixel_index].x += 255.99 * sqrt(col.x);
+    accumulate[pixel_index].y += 255.99 * sqrt(col.y);
+    accumulate[pixel_index].z += 255.99 * sqrt(col.z);
+    accumulate[pixel_index].w += 255;
+
+    uchar4 data;
+
+    data.x = (accumulate[pixel_index].x / framecount);
+    data.y = (accumulate[pixel_index].y / framecount);
+    data.z = (accumulate[pixel_index].z / framecount);
+    data.w = (accumulate[pixel_index].w / framecount);
+
+    surf2Dwrite(data, surf, i * sizeof(uchar4), max_y - j - 1,
+        cudaBoundaryModeZero
+    );
 }
 
 
@@ -105,14 +123,14 @@ __global__ void create_world(HitTable **d_list, HitTable **d_world, Camera **d_c
 {
     if (threadIdx.x == 0 && blockIdx.x == 0)
     {
-        d_list[0] = new Sphere(Vec3f(0,-1000.0,-1), 1000,
+        d_list[0] = new Sphere(Vec3f(0,-500.0,-1), 500,
                         new Metal(Vec3f(0.7, 0.6, 0.5), 0.0));
 
         curandState local_rand_state = *rand_state;
         int         i                = 1;
-        for (int a = -11; a < 11; a++)
+        for (int a = -SCENE_OBJECTS; a < SCENE_OBJECTS; a++)
         {
-            for (int b = -11; b < 11; b++)
+            for (int b = -SCENE_OBJECTS; b < SCENE_OBJECTS; b++)
             {
                 float choose_mat = RND;
                 Vec3f center(a + RND, 0.2, b + RND);
@@ -137,7 +155,7 @@ __global__ void create_world(HitTable **d_list, HitTable **d_world, Camera **d_c
         d_list[i++] = new Sphere(Vec3f(4, 1, 0), 1.0, new Metal(Vec3f(0.7, 0.6, 0.7), 0.0));
 
         *rand_state = local_rand_state;
-        *d_world    = new HitTableList(d_list, 22 * 22 + 1 + 3);
+        *d_world    = new HitTableList(d_list, SCENE_OBJECTS * SCENE_OBJECTS * 4 + 1 + 3);
 
         Vec3f lookfrom(13, 2, 3);
         Vec3f lookat(0, 0, 0);
@@ -151,7 +169,7 @@ __global__ void create_world(HitTable **d_list, HitTable **d_world, Camera **d_c
 
 __global__ void free_world(HitTable **d_list, HitTable **d_world, Camera **d_camera)
 {
-    for (int i = 0; i < 22 * 22 + 1 + 3; i++)
+    for (int i = 0; i < SCENE_OBJECTS * SCENE_OBJECTS * 4 + 1 + 3; i++)
     {
         delete ((Sphere *) d_list[i])->mat_ptr;
         delete d_list[i];
@@ -160,102 +178,89 @@ __global__ void free_world(HitTable **d_list, HitTable **d_world, Camera **d_cam
     delete *d_camera;
 }
 
-void ray_tracing()
-{
-    int nx = 1920 * 2;
-    int ny = 1080 * 2;
-    int ns = 50;
+__global__ void simple_kernel(cudaSurfaceObject_t surf, int w, int h) {
+    int i = threadIdx.x + blockIdx.x * blockDim.x;
+    int j = threadIdx.y + blockIdx.y * blockDim.y;
+    if ((i >= w) || (j >= h)) {
+        return;
+    }
+
+    uchar4 data;
+
+    surf2Dread(&data, surf, i*sizeof(uchar4) , j);
+
+    data.x += 1;
+    data.y += 1;
+    data.z += 1;
+
+    surf2Dwrite(data, surf,
+        i * sizeof(uchar4), j,
+        cudaBoundaryModeZero
+    );
+}
+
+#include "renderer.h"
+
+void Renderer::cudaRenderInit() {
+
+    int num_pixels = _bufferWidth * _bufferHeight;
+    // allocate random state
+    checkCudaErrors(cudaMalloc((void **) &d_rand_state, num_pixels * sizeof(curandState)));
+    checkCudaErrors(cudaMalloc((void **) &d_rand_state2, 1 * sizeof(curandState)));
+
+    // we need that 2nd random state to be initialized for the world creation
+    rand_init<<<1, 1>>>(static_cast<curandState *>(d_rand_state2));
+    checkCudaErrors(cudaGetLastError());
+    checkCudaErrors(cudaDeviceSynchronize());
+
+    int        num_hitables = SCENE_OBJECTS * SCENE_OBJECTS * 4 + 1 + 3;
+    checkCudaErrors(cudaMalloc((void **) &d_list, num_hitables * sizeof(HitTable *)));
+    checkCudaErrors(cudaMalloc((void **) &d_world, sizeof(HitTable *)));
+    checkCudaErrors(cudaMalloc((void **) &d_camera, sizeof(Camera *)));
+
+    create_world<<<1, 1>>>(d_list, d_world, d_camera, _bufferWidth, _bufferHeight, static_cast<curandState *>(d_rand_state2));
+    checkCudaErrors(cudaGetLastError());
+    checkCudaErrors(cudaDeviceSynchronize());
 
     int tx = 16;
     int ty = 16;
 
-    std::cerr << "Rendering a " << nx << "x" << ny << " image with " << ns << " samples per pixel ";
-    std::cerr << "in " << tx << "x" << ty << " blocks.\n";
-
-    int    num_pixels = nx * ny;
-    size_t fb_size    = num_pixels * sizeof(Vec3f);
-
-    // allocate FB
-    Vec3f *fb;
-    checkCudaErrors(cudaMallocManaged((void **) &fb, fb_size));
-
-    // allocate random state
-    curandState *d_rand_state;
-    checkCudaErrors(cudaMalloc((void **) &d_rand_state, num_pixels * sizeof(curandState)));
-    curandState *d_rand_state2;
-    checkCudaErrors(cudaMalloc((void **) &d_rand_state2, 1 * sizeof(curandState)));
-
-    // we need that 2nd random state to be initialized for the world creation
-    rand_init<<<1, 1>>>(d_rand_state2);
-    checkCudaErrors(cudaGetLastError());
-    checkCudaErrors(cudaDeviceSynchronize());
-
-    // make our world of hitables & the camera
-    HitTable **d_list;
-    int        num_hitables = 22 * 22 + 1 + 3;
-    checkCudaErrors(cudaMalloc((void **) &d_list, num_hitables * sizeof(HitTable *)));
-    HitTable **d_world;
-    checkCudaErrors(cudaMalloc((void **) &d_world, sizeof(HitTable *)));
-    Camera **d_camera;
-    checkCudaErrors(cudaMalloc((void **) &d_camera, sizeof(Camera *)));
-    create_world<<<1, 1>>>(d_list, d_world, d_camera, nx, ny, d_rand_state2);
-    checkCudaErrors(cudaGetLastError());
-    checkCudaErrors(cudaDeviceSynchronize());
-
-    clock_t start, stop;
-    start = clock();
-    // Render our buffer
-    dim3 blocks(nx / tx + 1, ny / ty + 1);
+    dim3 blocks( _bufferWidth/ tx + 1, _bufferHeight / ty + 1);
     dim3 threads(tx, ty);
-    render_init<<<blocks, threads>>>(nx, ny, d_rand_state);
+    render_init<<<blocks, threads>>>(_bufferWidth, _bufferHeight, static_cast<curandState *>(d_rand_state));
     checkCudaErrors(cudaGetLastError());
     checkCudaErrors(cudaDeviceSynchronize());
+}
 
-    int tally, *dev_tally;
-    cudaMalloc((void **)&dev_tally, sizeof(int));
-    tally = 0;
-    cudaMemcpy(dev_tally, &tally, sizeof(int), cudaMemcpyHostToDevice);
+void Renderer::cudaRenderDraw() {
+    int tx = 16;
+    int ty = 16;
+    int ns = 1;
 
-    render<<<blocks, threads>>>(fb, nx, ny, ns, d_camera, d_world, d_rand_state, dev_tally);
+    dim3 blocks(_bufferWidth / tx + 1, _bufferHeight / ty + 1);
+    dim3 threads(tx, ty);
+    float duration = clock();
+    render<<<blocks, threads>>>(cudaSurf, _cuda_res, _bufferWidth, _bufferHeight, ns, d_camera, d_world, static_cast<curandState *>(d_rand_state), framecount);
+    // simple_kernel<<<blocks, threads>>>(cudaSurf, _bufferWidth, _bufferHeight);
+    cudaDeviceSynchronize();
+    duration = clock() - duration;
+    duration /= CLOCKS_PER_SEC / 1000.0;
 
-    do {
-        cudaMemcpy(&tally, dev_tally, sizeof(int), cudaMemcpyDeviceToHost); 
-        printf("progress: %d/%d\n", tally, num_pixels);
-    } while (tally < num_pixels);
+    int idx = framecount % 60;
+    total_time += duration - frame_time[idx];
+    frame_time[idx] = duration;
+}
 
-    checkCudaErrors(cudaGetLastError());
-    checkCudaErrors(cudaDeviceSynchronize());
-    stop                 = clock();
-    double timer_seconds = ((double) (stop - start)) / CLOCKS_PER_SEC;
-    std::cerr << "took " << timer_seconds << " seconds.\n";
-
-    // Output FB as Image
-    std::vector<uint> pixels(nx * ny * 3);
-    std::cout << "P3\n" << nx << " " << ny << "\n255\n";
-    for (int j = ny - 1; j >= 0; j--)
-    {
-        for (int i = 0; i < nx; i++)
-        {
-            size_t pixel_index = j * nx + i;
-            pixels[pixel_index * 3] = int(255.99 * fb[pixel_index].x);
-            pixels[pixel_index * 3 + 1] = int(255.99 * fb[pixel_index].y);
-            pixels[pixel_index * 3 + 2] = int(255.99 * fb[pixel_index].z);
-        }
-    }
-
-    stbi_write_png("output.png", nx, ny, 3, pixels.data(), nx * 3);
-
+void Renderer::cudaRenderClean() {
     // clean up
     checkCudaErrors(cudaDeviceSynchronize());
     free_world<<<1, 1>>>(d_list, d_world, d_camera);
     checkCudaErrors(cudaGetLastError());
-    checkCudaErrors(cudaFree(dev_tally));
     checkCudaErrors(cudaFree(d_camera));
     checkCudaErrors(cudaFree(d_world));
     checkCudaErrors(cudaFree(d_list));
     checkCudaErrors(cudaFree(d_rand_state));
     checkCudaErrors(cudaFree(d_rand_state2));
-    checkCudaErrors(cudaFree(fb));
 
     cudaDeviceReset();
 }

@@ -5,19 +5,22 @@ set (INCLUDE
     common/CudaUtils.h
 
     # 
-    interop.h
 
     # implementations
     camera.h
+    cudaRenderer.h
     renderer.h
 )
 
 set (SOURCE
     #
-    interop.cpp
 
     # implementations
     renderer.cpp
+    cudaRenderer.cu
+
+    # interop.h
+    # interop.cpp
 
     # entry
     main.cpp
@@ -44,4 +47,5 @@ PUBLIC
     cuda
     ${CUDA_LIBRARIES}
     ${OPENGL_LIBRARIES}
+    ${OpenGL_LIBRARIES}
 )
