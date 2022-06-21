@@ -4,23 +4,39 @@ set (INCLUDE
     common/CudaMath.h
     common/CudaUtils.h
 
+    common.h
+
     # 
 
     # implementations
+    ray.h
+    material.h
+
     camera.h
     cudaRenderer.h
     renderer.h
+
+    texture.h
+
+    shape.h
+    primitive.h
+    aggregates.h
+    scene.h
 )
 
 set (SOURCE
     #
+    shape.cpp
+    material.cpp
+    primitive.cpp
+    aggregates.cpp
+    scene.cpp
+
+    texture.cpp
 
     # implementations
     renderer.cpp
     cudaRenderer.cu
-
-    # interop.h
-    # interop.cpp
 
     # entry
     main.cpp

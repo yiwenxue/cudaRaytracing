@@ -29,6 +29,8 @@ endif()
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
+set (CMAKE_CUDA_SEPARABLE_COMPILATION on)
+
 add_subdirectory(external)
 
 add_subdirectory(src)

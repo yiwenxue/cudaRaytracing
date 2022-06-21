@@ -1,5 +1,7 @@
 #pragma once
 
+#include <float.h>
+
 #include <cuda_runtime.h>
 ////////////////////////////////////////////////////////////////////////////////
 typedef unsigned int   uint;
@@ -208,6 +210,11 @@ inline __host__ __device__ float length(float3 v)
     return sqrtf(dot(v, v));
 }
 
+inline __host__ __device__ float lengthSq(float3 v)
+{
+    return dot(v, v);
+}
+
 // normalize
 inline __host__ __device__ float3 normalize(float3 v)
 {
@@ -374,6 +381,11 @@ struct Vec3f
     inline __host__ __device__ static Vec3f cross(Vec3f a, Vec3f b)
     {
         return Vec3f(a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x);
+    }
+
+    inline __host__ __device__ float &operator[](const int idx)
+    {
+        return _v[idx];
     }
 
     inline __host__ __device__ Vec3f &operator+=(const Vec3f &v)

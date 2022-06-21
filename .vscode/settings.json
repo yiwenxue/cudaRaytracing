@@ -72,6 +72,15 @@
         "cinttypes": "cpp",
         "valarray": "cpp",
         "khrplatform.h": "c",
-        "ios": "cpp"
+        "ios": "cpp",
+        "variant": "cpp",
+        "csignal": "cpp",
+        "strstream": "cpp",
+        "complex": "cpp",
+        "source_location": "cpp",
+        "ranges": "cpp",
+        "span": "cpp",
+        "typeindex": "cpp",
+        "__config": "cpp"
     }
 }
