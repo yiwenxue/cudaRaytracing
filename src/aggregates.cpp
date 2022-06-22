@@ -2,6 +2,23 @@
 #include <algorithm>
 #include <cstdio>
 
+struct BVHPrimitive
+{
+    BVHPrimitive() = default;
+
+    BVHPrimitive(size_t primitiveIndex, const AABB bounds) :
+        primitiveIndex(primitiveIndex), bounds(bounds)
+    {}
+
+    Vec3f getCenter() const
+    {
+        return bounds.pMin * 0.5 + bounds.pMax * 0.5;
+    }
+
+    size_t primitiveIndex{0};
+    AABB   bounds{};
+};
+
 Aggregate::Aggregate(const std::vector<Primitive *> prims, int max_depth) :
     primitives(prims), max_depth(max_depth)
 {}
@@ -14,8 +31,6 @@ Aggregate::~Aggregate()
 BVHAggregate::BVHAggregate(const std::vector<Primitive *> prims, int max_depth) :
     Aggregate(prims, max_depth)
 {
-    printf("Start to build a bvh aggregate.\n");
-
     std::vector<Primitive *>  orderedPrims(primitives.size());
     std::vector<BVHPrimitive> bvhPrimitives(primitives.size());
 
@@ -25,22 +40,9 @@ BVHAggregate::BVHAggregate(const std::vector<Primitive *> prims, int max_depth) 
     BVHBuildNode *root = buildRecursive(bvhPrimitives, primitives.size(), 0, orderedPrims);
 
     primitives.swap(orderedPrims);
+
+    printBVH(root);
 }
-
-struct BVHPrimitive
-{
-    BVHPrimitive(size_t primitiveIndex, const AABB &bounds) :
-        primitiveIndex(primitiveIndex), bounds(bounds)
-    {}
-
-    Vec3f getCenter() const
-    {
-        return bounds.aabb[0] * 0.5 + bounds.aabb[1] * 0.5;
-    }
-
-    size_t primitiveIndex;
-    AABB   bounds;
-};
 
 BVHBuildNode *BVHAggregate::buildRecursive(std::vector<BVHPrimitive> bvhPrimitives,
                                            size_t totalNodes, size_t orderedPrimOffset,
@@ -79,7 +81,7 @@ BVHBuildNode *BVHAggregate::buildRecursive(std::vector<BVHPrimitive> bvhPrimitiv
 
         {
             // mid point to split bvh
-            float pmid = (centroidBounds.aabb[0][dim] + centroidBounds.aabb[1][dim]) * 0.5;
+            float pmid = (centroidBounds.pMin[dim] + centroidBounds.pMax[dim]) * 0.5;
             std::partition(
                 bvhPrimitives.begin(), bvhPrimitives.end(),
                 [dim, pmid](const BVHPrimitive &prim) { return prim.getCenter()[dim] < pmid; });
@@ -105,7 +107,41 @@ BVHBuildNode *BVHAggregate::buildRecursive(std::vector<BVHPrimitive> bvhPrimitiv
 BVHAggregate::~BVHAggregate()
 {}
 
-bool BVHAggregate::intersect(const Ray &ray, float hit) const
+bool BVHAggregate::bvhNodeIntersect(const BVHBuildNode *node, const Ray &ray, float tMax) const
 {
-    return false;
+    if (node->nPrimitives > 0)
+    {
+        for (size_t i = 0; i < node->firstPrimitive; i++)
+        {
+            if (primitives[node->firstPrimitive + i]->intersectP(ray, tMax))
+                return true;
+        }
+        return false;
+    }
+    else
+    {
+        if (bvhNodeIntersect(node->children[0], ray, tMax))
+            return true;
+        if (bvhNodeIntersect(node->children[1], ray, tMax))
+            return true;
+        return false;
+    }
+}
+bool BVHAggregate::intersect(const Ray &ray, float tMax) const
+{
+    return bvhNodeIntersect(root, ray, tMax);
+}
+
+void printBVH(BVHBuildNode *node, int depth)
+{
+    if (node->nPrimitives > 0)
+    {
+        printf("%*sLeaf %d: %d nodes\n", depth * 2, "", node->firstPrimitive, node->nPrimitives);
+    }
+    else
+    {
+        printf("%*sInterior %d: %d nodes\n", depth * 2, "", node->splitx, node->nPrimitives);
+        printBVH(node->children[0], depth + 1);
+        printBVH(node->children[1], depth + 1);
+    }
 }

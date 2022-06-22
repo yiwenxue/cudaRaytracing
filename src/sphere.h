@@ -1,12 +1,11 @@
 #pragma once
-
-#include <cuda_runtime.h>
-
+#include "common.h"
 #include "common/CudaMath.h"
 
 #include "hittable.h"
-
 #include "ray.h"
+
+#include <cuda_runtime.h>
 
 struct Sphere : public HitTable
 {
@@ -14,11 +13,11 @@ struct Sphere : public HitTable
     Vec3f     center;
     Material *mat_ptr;
 
-    __device__ Sphere(){};
+    CPU_GPU Sphere(){};
 
-    __device__ Sphere(Vec3f c, float r, Material *m) : center(c), radius(r), mat_ptr(m){};
+    CPU_GPU Sphere(Vec3f c, float r, Material *m) : center(c), radius(r), mat_ptr(m){};
 
-    __device__ bool hit(const Ray &r, float t_min, float t_max, HitRecord &rec) const override
+    CPU_GPU bool hit(const Ray &r, float t_min, float t_max, HitRecord &rec) const override
     {
         Vec3f oc     = r.origin - center;
         float a      = r.direct.lengthsq();

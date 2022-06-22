@@ -1,24 +1,23 @@
 #pragma once
 
+#include "common.h"
 #include "hittable.h"
-
 #include "ray.h"
 
 class HitTableList : public HitTable
 {
 public:
-    __device__ HitTableList(){};
-    __device__ HitTableList(HitTable **l, int s) : list(l), size(s){};
+    CPU_GPU HitTableList(){};
+    CPU_GPU HitTableList(HitTable **l, int s) : list(l), size(s){};
 
-    __device__ virtual bool hit(const Ray &r, float t_min, float t_max,
-                                HitRecord &rec) const override;
+    CPU_GPU virtual bool hit(const Ray &r, float t_min, float t_max, HitRecord &rec) const override;
 
 public:
     HitTable **list;
     int        size;
 };
 
-__device__ bool HitTableList::hit(const Ray &r, float t_min, float t_max, HitRecord &rec) const
+CPU_GPU bool HitTableList::hit(const Ray &r, float t_min, float t_max, HitRecord &rec) const
 {
     HitRecord temp_rec;
     auto      hit_anything   = false;

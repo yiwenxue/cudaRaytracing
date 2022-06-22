@@ -35,11 +35,11 @@ int main(int argc, char **argv)
 
     scene->buildAggregate();
 
-    for (auto *shape : shapes)
-    {
-        shape->toString(buffer);
-        printf("%s\n", buffer);
-    }
+    // for (auto *shape : shapes)
+    // {
+    //     shape->toString(buffer);
+    //     printf("%s\n", buffer);
+    // }
 
     delete scene;
     return 0;

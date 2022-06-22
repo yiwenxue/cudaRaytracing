@@ -42,10 +42,11 @@ struct BVHBuildNode
     AABB          bound;
     BVHBuildNode *children[2];
 
-    int splitx;
-    int firstPrimitive;
-    int nPrimitives;
+    int splitx{0};
+    int firstPrimitive{0};
+    int nPrimitives{0};
 };
+void printBVH(BVHBuildNode *node, int depth = 0);
 
 struct BVHPrimitive;
 
@@ -63,6 +64,8 @@ public:
     ~BVHAggregate();
 
     bool intersect(const Ray &ray, float hit) const override;
+
+    bool bvhNodeIntersect(const BVHBuildNode *node, const Ray &ray, float tMax = FLT_MAX) const;
 
     BVHBuildNode *buildRecursive(std::vector<BVHPrimitive> bvhPrimitives, size_t totalNodes,
                                  size_t                    orderedPrimOffset,

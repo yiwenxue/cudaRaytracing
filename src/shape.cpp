@@ -1,6 +1,29 @@
 #include "shape.h"
 #include <cstdio>
 
+CPU_GPU bool AABB::intersectP(const Ray &ray, float tMax) const
+{
+    float tMin  = 0.0f;
+    float tMax_ = tMax;
+    for (int i = 0; i < 3; i++)
+    {
+        float invD = ray.invDir[i];
+        float t0   = (pMin[i] - ray.origin[i]) * invD;
+        float t1   = (pMax[i] - ray.origin[i]) * invD;
+        if (invD < 0.0f)
+        {
+            std::swap(t0, t1);
+        }
+        tMin  = t0 > tMin ? t0 : tMin;
+        tMax_ = t1 < tMax_ ? t1 : tMax_;
+        if (tMin > tMax_)
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 // use std::optional to make the implementation of intersectP amd intersect simpler
 
 CPU_GPU bool IntersectTriangle(const Ray &ray, float tMax, Vec3f p0, Vec3f p1, Vec3f p2,

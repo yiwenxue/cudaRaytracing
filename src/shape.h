@@ -10,9 +10,10 @@
 
 struct Bounds
 {
-    CPU_GPU virtual inline float getVolume() const           = 0;
-    CPU_GPU virtual inline Vec3f getCenter() const           = 0;
-    CPU_GPU virtual inline Vec3f getCorner(int corner) const = 0;
+    CPU_GPU virtual inline float getVolume() const                                      = 0;
+    CPU_GPU virtual inline Vec3f getCenter() const                                      = 0;
+    CPU_GPU virtual inline Vec3f getCorner(int corner) const                            = 0;
+    CPU_GPU virtual bool         intersectP(const Ray &ray, float tMax = FLT_MAX) const = 0;
 };
 
 struct Intersection
@@ -24,29 +25,32 @@ struct Intersection
 
 struct AABB : public Bounds
 {
-    Vec3f aabb[2] = {0};
+    Vec3f pMin = {0};
+    Vec3f pMax = {0};
 
     CPU_GPU inline float getVolume() const
     {
-        Vec3f d = aabb[1] - aabb[0];
+        Vec3f d = pMax - pMin;
         return d.x * d.y * d.z;
     }
 
     CPU_GPU inline Vec3f getCenter() const
     {
-        return (aabb[0] + aabb[1]) * 0.5f;
+        return (pMin + pMax) * 0.5f;
     }
 
     CPU_GPU inline Vec3f getCorner(int corner) const
     {
         assert(corner >= 0 && corner < 8 && "Invalid corner index");
-        return Vec3f((corner & 1) ? aabb[1].x : aabb[0].x, (corner & 2) ? aabb[1].y : aabb[0].y,
-                     (corner & 4) ? aabb[1].z : aabb[0].z);
+        return Vec3f((corner & 1) ? pMax.x : pMin.x, (corner & 2) ? pMax.y : pMin.y,
+                     (corner & 4) ? pMax.z : pMin.z);
     }
+
+    CPU_GPU bool intersectP(const Ray &ray, float tMax = FLT_MAX) const;
 
     CPU_GPU inline Vec3f diagonal() const
     {
-        return aabb[1] - aabb[0];
+        return pMax - pMin;
     }
 
     CPU_GPU inline uint maxDimension() const
@@ -64,20 +68,18 @@ struct AABB : public Bounds
 CPU_GPU inline AABB Union(const AABB &a, const Vec3f &b)
 {
     AABB c;
-    c.aabb[0] =
-        Vec3f(std::min(a.aabb[0].x, b.x), std::min(a.aabb[0].y, b.y), std::min(a.aabb[0].z, b.z));
-    c.aabb[1] =
-        Vec3f(std::max(a.aabb[1].x, b.x), std::max(a.aabb[1].y, b.y), std::max(a.aabb[1].z, b.z));
+    c.pMin = Vec3f(std::min(a.pMin.x, b.x), std::min(a.pMin.y, b.y), std::min(a.pMin.z, b.z));
+    c.pMax = Vec3f(std::max(a.pMax.x, b.x), std::max(a.pMax.y, b.y), std::max(a.pMax.z, b.z));
     return c;
 }
 
 CPU_GPU inline AABB Union(const AABB &a, const AABB &b)
 {
     AABB c;
-    c.aabb[0] = Vec3f(std::min(a.aabb[0].x, b.aabb[0].x), std::min(a.aabb[0].y, b.aabb[0].y),
-                      std::min(a.aabb[0].z, b.aabb[0].z));
-    c.aabb[1] = Vec3f(std::max(a.aabb[1].x, b.aabb[1].x), std::max(a.aabb[1].y, b.aabb[1].y),
-                      std::max(a.aabb[1].z, b.aabb[1].z));
+    c.pMin = Vec3f(std::min(a.pMin.x, b.pMin.x), std::min(a.pMin.y, b.pMin.y),
+                   std::min(a.pMin.z, b.pMin.z));
+    c.pMax = Vec3f(std::max(a.pMax.x, b.pMax.x), std::max(a.pMax.y, b.pMax.y),
+                   std::max(a.pMax.z, b.pMax.z));
     return c;
 }
 
@@ -112,8 +114,8 @@ struct Sphere : public Shape
 
     CPU_GPU Sphere(Vec3f c, float r) : center(c), radius(r)
     {
-        bound.aabb[0] = c - Vec3f(r);
-        bound.aabb[1] = c + Vec3f(r);
+        bound.pMin = c - Vec3f(r);
+        bound.pMax = c + Vec3f(r);
     };
 
     CPU_GPU bool intersect(const Ray &ray, float tMax, Intersection &res) const override;

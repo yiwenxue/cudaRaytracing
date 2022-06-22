@@ -1,13 +1,14 @@
 #pragma once
 
+#include "common.h"
 #include "hittable.h"
 #include "ray.h"
 
 #include <curand_kernel.h>
 
-__device__ Vec3f random_in_unit_sphere(curandState *local_rand_state);
-__device__ Vec3f refract(const Vec3f &v, const Vec3f &n, float ni_over_nt);
-__device__ float reflectance(float cosine, float ref_idx);
+GPU_ONLY Vec3f random_in_unit_sphere(curandState *local_rand_state);
+CPU_GPU Vec3f  refract(const Vec3f &v, const Vec3f &n, float ni_over_nt);
+CPU_GPU float  reflectance(float cosine, float ref_idx);
 
 #define MIN(a, b) a < b ? a : b
 #define MAX(a, b) a > b ? a : b
@@ -16,7 +17,7 @@ __device__ float reflectance(float cosine, float ref_idx);
     Vec3f(curand_uniform(local_rand_state), curand_uniform(local_rand_state), \
           curand_uniform(local_rand_state))
 
-__device__ Vec3f random_in_unit_sphere(curandState *local_rand_state)
+GPU_ONLY Vec3f random_in_unit_sphere(curandState *local_rand_state)
 {
     Vec3f p;
     do
@@ -26,7 +27,7 @@ __device__ Vec3f random_in_unit_sphere(curandState *local_rand_state)
     return p;
 }
 
-__device__ Vec3f refract(const Vec3f &v, const Vec3f &n, float ni_over_nt)
+CPU_GPU Vec3f refract(const Vec3f &v, const Vec3f &n, float ni_over_nt)
 {
     auto  cos_theta      = MIN(-Vec3f::dot(v, n), 1.0);
     Vec3f r_out_perp     = (v + n * cos_theta) * ni_over_nt;
@@ -34,7 +35,7 @@ __device__ Vec3f refract(const Vec3f &v, const Vec3f &n, float ni_over_nt)
     return r_out_perp + r_out_parallel;
 }
 
-__device__ float reflectance(float cosine, float ref_idx)
+CPU_GPU float reflectance(float cosine, float ref_idx)
 {
     // Use Schlick's approximation for reflectance.
     float r0 = (1 - ref_idx) / (1 + ref_idx);
@@ -45,17 +46,17 @@ __device__ float reflectance(float cosine, float ref_idx)
 class Material
 {
 public:
-    __device__ virtual bool scatter(const Ray &r_in, const HitRecord &rec, Vec3f &attenuation,
-                                    Ray &scattered, curandState *local_rand_state) const = 0;
+    GPU_ONLY virtual bool scatter(const Ray &r_in, const HitRecord &rec, Vec3f &attenuation,
+                                  Ray &scattered, curandState *local_rand_state) const = 0;
 };
 
 class Lambertian : public Material
 {
 public:
-    __device__ Lambertian(const Vec3f &a) : albedo(a){};
+    CPU_GPU Lambertian(const Vec3f &a) : albedo(a){};
 
-    __device__ virtual bool scatter(const Ray &r_in, const HitRecord &rec, Vec3f &attenuation,
-                                    Ray &scattered, curandState *local_rand_state) const override
+    GPU_ONLY virtual bool scatter(const Ray &r_in, const HitRecord &rec, Vec3f &attenuation,
+                                  Ray &scattered, curandState *local_rand_state) const override
     {
         Vec3f target = rec.p + rec.normal + random_in_unit_sphere(local_rand_state);
         scattered    = Ray(rec.p, target - rec.p);
@@ -69,10 +70,10 @@ public:
 class Metal : public Material
 {
 public:
-    __device__ Metal(const Vec3f &a, double f) : albedo(a), fuzz(f < 1 ? f : 1){};
+    CPU_GPU Metal(const Vec3f &a, double f) : albedo(a), fuzz(f < 1 ? f : 1){};
 
-    __device__ virtual bool scatter(const Ray &r_in, const HitRecord &rec, Vec3f &attenuation,
-                                    Ray &scattered, curandState *local_rand_state) const override
+    GPU_ONLY virtual bool scatter(const Ray &r_in, const HitRecord &rec, Vec3f &attenuation,
+                                  Ray &scattered, curandState *local_rand_state) const override
     {
         Vec3f reflected = reflect(Vec3f::normal(r_in.direct), rec.normal);
         scattered       = Ray(rec.p, reflected + random_in_unit_sphere(local_rand_state) * fuzz);
@@ -88,10 +89,10 @@ public:
 class Dielectric : public Material
 {
 public:
-    __device__ Dielectric(float ri) : ref_idx(ri){};
+    CPU_GPU Dielectric(float ri) : ref_idx(ri){};
 
-    __device__ virtual bool scatter(const Ray &r_in, const HitRecord &rec, Vec3f &attenuation,
-                                    Ray &scattered, curandState *local_rand_state) const override
+    GPU_ONLY virtual bool scatter(const Ray &r_in, const HitRecord &rec, Vec3f &attenuation,
+                                  Ray &scattered, curandState *local_rand_state) const override
     {
         attenuation            = Vec3f(1.0, 1.0, 1.0);
         float refraction_ratio = rec.front_face ? (1.0 / ref_idx) : ref_idx;

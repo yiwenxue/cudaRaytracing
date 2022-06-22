@@ -388,6 +388,11 @@ struct Vec3f
         return _v[idx];
     }
 
+    inline __host__ __device__ const float &operator[](const int idx) const
+    {
+        return _v[idx];
+    }
+
     inline __host__ __device__ Vec3f &operator+=(const Vec3f &v)
     {
         x += v.x;
